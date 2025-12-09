@@ -1,0 +1,9 @@
+{
+  "project_name": "{name_team}_{model_name}",
+  "repo_name": "{name_team}",
+  "author_name": "Seu Nome",
+  "email": "(Opcional) seu.email@dominio.com",
+  "github_username": "(Opcional) seuGitHub",
+  "description": "Descrição do projeto",
+  "compatible_python_versions": ["3.10", "3.11", "3.12", "3.13"]
+}

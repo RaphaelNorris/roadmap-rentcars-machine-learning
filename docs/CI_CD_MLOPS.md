@@ -246,9 +246,116 @@ notifications:
 
 ---
 
-## Integração com MLFlow
+## MLFlow
 
-### Variáveis injetadas automaticamente
+### Visão Geral
+
+O MLFlow é o sistema central de gestão do ciclo de vida dos modelos. Ele é responsável por:
+
+- **Tracking**: Registrar experimentos, métricas, parâmetros
+- **Model Registry**: Versionar e gerenciar modelos
+- **Artifacts**: Armazenar modelos e arquivos
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        MLFlow Server                                        │
+│                   http://mlflow.bi.rentcars.com                            │
+│                                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐            │
+│  │    Tracking     │  │ Model Registry  │  │   Artifacts     │            │
+│  │  (experimentos) │  │   (versões)     │  │   (S3)          │            │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘            │
+│           │                    │                    │                      │
+│           └────────────────────┼────────────────────┘                      │
+│                                │                                           │
+│                         ┌──────┴──────┐                                    │
+│                         │  PostgreSQL │                                    │
+│                         │  (metadata) │                                    │
+│                         └─────────────┘                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### URL de Acesso
+
+| Ambiente | URL |
+|----------|-----|
+| MLFlow UI | http://mlflow.bi.rentcars.com |
+| Tracking API | http://mlflow.bi.rentcars.com |
+
+---
+
+### Model Registry
+
+O Model Registry gerencia as versões dos modelos:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Model Registry                                                             │
+│                                                                             │
+│  📦 recsys                                                                  │
+│     ├── v1 (roc_auc: 0.78) .......... Archived                             │
+│     ├── v2 (roc_auc: 0.82) .......... Archived                             │
+│     ├── v3 (roc_auc: 0.85) .......... Production  ✅                        │
+│     └── v4 (roc_auc: 0.87) .......... Staging                              │
+│                                                                             │
+│  📦 churn                                                                   │
+│     ├── v1 (roc_auc: 0.80) .......... Production  ✅                        │
+│     └── v2 (roc_auc: 0.79) .......... Archived                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Stages disponíveis:**
+
+| Stage | Descrição |
+|-------|-----------|
+| `None` | Modelo recém registrado |
+| `Staging` | Em validação/homologação |
+| `Production` | Em produção |
+| `Archived` | Versão antiga/descontinuada |
+
+---
+
+### Fluxo de Promoção de Modelos
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  1. TREINO (branch feature)                                                 │
+│                                                                             │
+│  Cientista treina modelo                                                   │
+│       │                                                                     │
+│       ▼                                                                     │
+│  mlflow.log_model() ──────▶ Modelo registrado (Stage: None)                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  2. VALIDAÇÃO (branch dev)                                                  │
+│                                                                             │
+│  Time valida métricas                                                      │
+│       │                                                                     │
+│       ▼                                                                     │
+│  Promove para Staging ──────▶ Modelo em Staging                            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  3. PRODUÇÃO (branch master)                                                │
+│                                                                             │
+│  Aprovação final                                                           │
+│       │                                                                     │
+│       ▼                                                                     │
+│  Promove para Production ──────▶ Modelo em Production                      │
+│  (versão anterior → Archived)                                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Variáveis de Ambiente
 
 O `build_apps.sh` injeta automaticamente nas tasks:
 
@@ -258,18 +365,90 @@ O `build_apps.sh` injeta automaticamente nas tasks:
 | `MLFLOW_S3_ENDPOINT_URL` | https://s3.us-east-1.amazonaws.com |
 | `MLFLOW_EXPERIMENT_NAME` | {project_name} |
 
-### Uso no código
+---
+
+### Uso no Código
+
+#### Registrar experimento e métricas
 
 ```python
 import mlflow
 import os
 
-# Variáveis já estão no ambiente
+# Conecta ao MLFlow (variáveis já injetadas pelo Step Function)
 mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
 mlflow.set_experiment(os.environ["MLFLOW_EXPERIMENT_NAME"])
 
-# Carregar modelo em Production
+# Treina e registra
+with mlflow.start_run(run_name="treino-v1"):
+    # Log de parâmetros
+    mlflow.log_param("learning_rate", 0.01)
+    mlflow.log_param("max_depth", 6)
+
+    # Treina modelo
+    model = train_model(X_train, y_train)
+
+    # Log de métricas
+    mlflow.log_metric("roc_auc", 0.85)
+    mlflow.log_metric("f1", 0.72)
+
+    # Registra modelo
+    mlflow.sklearn.log_model(
+        model,
+        artifact_path="model",
+        registered_model_name="recsys"
+    )
+```
+
+#### Carregar modelo para inferência
+
+```python
+import mlflow
+import os
+
+mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+
+# Carrega modelo em Production
 model = mlflow.pyfunc.load_model("models:/recsys/Production")
+
+# Faz predições
+predictions = model.predict(features)
+```
+
+#### Promover modelo via código
+
+```python
+from mlflow import MlflowClient
+
+client = MlflowClient("http://mlflow.bi.rentcars.com")
+
+# Promover versão 4 para Production
+client.transition_model_version_stage(
+    name="recsys",
+    version="4",
+    stage="Production"
+)
+```
+
+---
+
+### Promover Modelo via UI
+
+1. Acessar http://mlflow.bi.rentcars.com
+2. Ir em **Models** → Selecionar modelo
+3. Clicar na versão desejada
+4. Clicar em **Stage** → **Transition to Production**
+
+---
+
+### Promover Modelo via CLI
+
+```bash
+# Promover para Staging
+mlflow models transition-stage --name recsys --version 4 --stage Staging
+
+# Promover para Production
+mlflow models transition-stage --name recsys --version 4 --stage Production
 ```
 
 ---

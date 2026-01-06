@@ -1,0 +1,8 @@
+{
+    "influxdb": {
+      "host": "grafana-influxdb-01.devops.rentcars.com",
+      "database": "trivy",
+      "username": "username",
+      "password": "password"
+    }
+  }

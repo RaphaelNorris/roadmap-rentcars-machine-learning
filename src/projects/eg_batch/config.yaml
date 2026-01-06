@@ -1,0 +1,108 @@
+project_name: eg_teste
+
+description: "Exemplo de implementação para modelos em batch"
+version: "0.0.1"
+
+owners:
+  tech_owner: "terceiro.george@rentcars.com"
+  business_owner: "bi@rentcars.com"
+
+tags:
+  domain: "teste"
+  criticality: "baixa"
+
+schedule:
+  enabled: true
+  cron: "0 3 * * ? *"
+  timeout_seconds: 3600
+  retries: 2
+
+#rules:
+#  retrain:
+#    # regra para retreinar o modelo
+#    type: "metric_based"   # time_based | metric_based | manual
+#    time_based:
+#      frequency_days: 7    # usado se type = time_based
+#    metric_based:
+#      metric_name: "roc_auc"
+#      threshold_drop: 0.02 # retreina se cair mais que 0.02 vs baseline
+#      evaluation_window_days: 7
+#    manual:
+#      allow_manual_trigger: true
+#      airflow_dag_id: "ml_churn_retrain_manual"  # se existir
+
+type: "batch"
+
+runtime:
+  python_version: "3.11"
+  requirements_file: "requirements.txt"
+  env_vars:
+    ENV: "dev"
+
+
+batch:
+  enabled: true
+  orchestrator: "step_functions"
+
+  pipeline:
+    # ordem de execução dos steps (ex: step_a >> step_b >> step_c)
+    steps:
+      - id: "step_a"
+        name: "extract_features"
+        command: "python main.py"
+        resources:
+          cpu: 1.0
+          memory_gb: 4
+
+#      - id: "step_b"
+#        name: "score_model"
+#        type: "python"
+#        depends_on:
+#          - "step_a"
+#        command: "python steps/score_model.py"
+#        resources:
+#          cpu: 1.0
+#          memory_gb: 4
+#
+#      - id: "step_c"
+#        name: "post_process_and_publish"
+#        type: "python"
+#        depends_on:
+#          - "step_b"
+#        command: "python steps/post_process.py"
+#        resources:
+#          cpu: 1.0
+#          memory_gb: 2
+
+infra:
+  compute:
+    provider: "ec2"
+    ec2_type: "t3.xlarge"
+    min_quantity: 0
+    max_quantity: 2
+    spot: true
+
+#monitoring:
+#  logging:
+#    level: "INFO"
+#    destination: "cloudwatch"
+#  metrics:
+#    enabled: true
+#    namespace: "rcdp.ml.churn_prediction"
+#    track:
+#      - "predictions_count"
+#      - "latency_ms_p95"
+#      - "roc_auc"
+#      - "f1"
+#  drift_detection:
+#    enabled: true
+#    feature_drift_threshold: 0.1
+#    target_drift_threshold: 0.05
+
+notifications:
+  on_success:
+    - "bi@rentcars.com"
+  on_failure:
+    - "bi@rentcars.com"
+    - "terceiro.george@rentcars.com"
+#  slack_channel: "#alertas-ml-churn"

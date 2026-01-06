@@ -1,0 +1,50 @@
+#TODO:
+#  branch dev tem que ter code review
+
+
+name: Build Apps
+on:
+  push:
+    branches:
+      - dev
+      - master
+    paths-ignore:
+      - '**/README.md'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: "us-east-1"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # Rodar diretamente no host para ter acesso total ao Docker e ferramentas
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Atualizado para v4
+
+      - name: Set ENV
+        id: set_workspace
+        run: |
+          if [[ "${GITHUB_REF##*/}" == "master" ]]; then            
+            echo "ENV=prd" >> $GITHUB_ENV
+          else
+            echo "ENV=dev" >> $GITHUB_ENV
+          fi
+
+      - name: Configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v4 # Atualizado para v4
+        with:
+          role-to-assume: arn:aws:iam::164528518414:role/github-actions/repo-ecr
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run build script
+        run: |
+          echo "Workspace: ${{ env.ENV }}"
+          chmod +x build_apps.sh
+          ./build_apps.sh

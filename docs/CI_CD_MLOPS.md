@@ -588,9 +588,240 @@ client.transition_model_version_stage(
 
 ---
 
+## Padroes de Nomenclatura
+
+### Projetos
+
+| Regra | Exemplo |
+|-------|---------|
+| Lowercase | recsys, churn |
+| Sem espacos (usar underscore) | churn_prediction |
+| Descritivo e curto | pricing_optimizer |
+
+### Branches
+
+Padrao: `<tipo>/<projeto>-<descricao>`
+
+| Tipo | Uso | Exemplo |
+|------|-----|---------|
+| feature/ | Nova funcionalidade | feature/recsys-add-embeddings |
+| fix/ | Correcao de bug | fix/churn-null-handling |
+| bugfix/ | Correcao de bug (alternativo) | bugfix/recsys-memory-leak |
+| hotfix/ | Correcao urgente em producao | hotfix/pricing-critical-error |
+| refactor/ | Refatoracao | refactor/recsys-optimize |
+| docs/ | Documentacao | docs/recsys-readme |
+| experiment/ | Experimento exploratorio | experiment/recsys-transformer |
+
+### MLFlow
+
+| Recurso | Padrao | Exemplo |
+|---------|--------|---------|
+| Experiment | {projeto} | recsys |
+| Registered Model | {projeto} | recsys |
+| Run Name | {descricao}-{data} | xgboost-tuned-20250106 |
+
+### AWS
+
+| Recurso | Padrao | Exemplo |
+|---------|--------|---------|
+| ECR Image | {ecr}:{projeto}-{versao} | ecr-prd:recsys-1.0.0 |
+| ECS Cluster | ml-cluster-{projeto} | ml-cluster-recsys |
+| Step Function | {projeto}-workflow | recsys-workflow |
+| Scheduler | sched-{projeto} | sched-recsys |
+| Log Group | /ecs/{projeto} | /ecs/recsys |
+
+---
+
+## Padroes de Commit
+
+### Formato
+
+```
+<tipo>: <descricao curta>
+```
+
+### Tipos
+
+| Tipo | Quando usar | Exemplo |
+|------|-------------|---------|
+| feat | Nova funcionalidade | feat: add user embeddings |
+| fix | Correcao de bug | fix: handle null values |
+| bug | Correcao de bug (alternativo) | bug: fix memory leak |
+| hotfix | Correcao urgente | hotfix: fix critical error |
+| refactor | Refatoracao sem mudar comportamento | refactor: optimize query |
+| docs | Documentacao | docs: update README |
+| test | Adicao ou correcao de testes | test: add unit tests |
+| chore | Tarefas de manutencao | chore: update dependencies |
+| style | Formatacao, sem mudanca de logica | style: fix indentation |
+| perf | Melhoria de performance | perf: optimize feature extraction |
+| ci | Mudancas no CI/CD | ci: add new workflow |
+| build | Mudancas no build | build: update Dockerfile |
+
+### Regras
+
+- Primeira linha: maximo 72 caracteres
+- Usar imperativo (add, fix, update)
+- Nao terminar com ponto
+- Em ingles ou portugues (manter consistencia no projeto)
+
+### Exemplos
+
+```bash
+feat: add collaborative filtering model
+fix: handle missing values in user_age
+bug: fix null pointer in scoring
+hotfix: fix critical pricing error
+refactor: optimize feature extraction pipeline
+docs: add API documentation
+test: add unit tests for model
+chore: update mlflow version
+perf: improve inference latency
+ci: add code quality checks
+```
+
+---
+
+## Padroes de Codigo
+
+### Estrutura de Arquivos
+
+```
+src/projects/{projeto}/
+├── config.yaml           # Configuracao
+├── main.py               # Entry point
+├── steps/                # Logica de cada step
+│   ├── extract_features.py
+│   ├── train_model.py
+│   └── score_model.py
+├── utils/                # Funcoes auxiliares
+├── tests/                # Testes
+├── notebooks/            # Notebooks de desenvolvimento
+├── requirements.txt      # Dependencias
+├── Dockerfile            # Imagem Docker
+└── README.md             # Documentacao
+```
+
+### Nomenclatura no Codigo
+
+| Tipo | Padrao | Exemplo |
+|------|--------|---------|
+| Variaveis | snake_case | user_features |
+| Funcoes | snake_case | extract_features() |
+| Constantes | UPPER_SNAKE_CASE | MAX_ITERATIONS |
+| Classes | PascalCase | FeatureExtractor |
+| DataFrames | df_{descricao} | df_features |
+
+### Imports
+
+```python
+# 1. Standard library
+import os
+import json
+from datetime import datetime
+
+# 2. Third party
+import pandas as pd
+import numpy as np
+import mlflow
+
+# 3. Local
+from utils import load_data
+```
+
+### Logging
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+logger.info("Iniciando processamento")
+logger.warning("Dados faltantes encontrados")
+logger.error("Falha ao carregar modelo")
+```
+
+---
+
+## Boas Praticas
+
+### Desenvolvimento
+
+1. Sempre partir da branch dev atualizada
+2. Testar localmente antes de abrir PR
+3. Registrar experimentos no MLFlow
+4. Usar variaveis de ambiente para configuracoes
+5. Nao commitar credenciais ou dados sensiveis
+
+### Dependencias
+
+```
+# BOM - versoes fixas
+pandas==2.0.3
+scikit-learn==1.3.0
+mlflow==2.9.2
+
+# RUIM - versoes abertas
+pandas
+scikit-learn
+mlflow
+```
+
+### Dockerfile
+
+```dockerfile
+# Usar imagem base especifica
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copiar e instalar deps primeiro (cache)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar codigo por ultimo
+COPY . .
+
+CMD ["python", "main.py"]
+```
+
+### Seguranca
+
+```python
+# ERRADO
+password = "minha_senha_123"
+
+# CERTO
+password = os.environ["DB_PASSWORD"]
+```
+
+---
+
+## Checklist
+
+### Antes de abrir PR
+
+- [ ] Codigo segue padroes de nomenclatura
+- [ ] Sem credenciais ou dados sensiveis
+- [ ] requirements.txt atualizado
+- [ ] config.yaml valido
+- [ ] Testado localmente
+- [ ] Metricas logadas no MLFlow
+
+### Antes de merge para master
+
+- [ ] Code review aprovado
+- [ ] Testado em ambiente dev
+- [ ] Modelo registrado no MLFlow (Staging)
+- [ ] Metricas validadas
+
+---
+
 ## Referências
 
 - [MLFlow Tracking Server](http://mlflow.bi.rentcars.com)
 - [AWS Step Functions Console](https://console.aws.amazon.com/states)
 - [AWS ECS Console](https://console.aws.amazon.com/ecs)
 - [GitHub Actions](https://github.com/rentcars/rentcars-data-platform-science/actions)
+- [Conventional Commits](https://www.conventionalcommits.org/)
+- [PEP 8 - Style Guide](https://peps.python.org/pep-0008/)
